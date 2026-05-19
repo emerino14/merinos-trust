@@ -335,7 +335,9 @@ def cargar_vix():
     result = {}
     for name, sym in tickers.items():
         try:
-            h = yf.Ticker(sym).history(period='1d', interval='5m')
+            h = yf.Ticker(sym).history(period='5d', interval='5m')
+            if h.empty:
+                h = yf.Ticker(sym).history(period='1mo', interval='1d')
             result[name] = round(float(h['Close'].iloc[-1]), 2) if not h.empty else None
         except:
             result[name] = None
@@ -476,14 +478,18 @@ def cargar_datos(ikey: str, expiry: str):
     fut_tick  = cfg["futures"]
 
     etf = yf.Ticker(etf_tick)
-    hist = etf.history(period="1d", interval="5m")
+    hist = etf.history(period="5d", interval="5m")
+    if hist.empty:
+        hist = etf.history(period="1mo", interval="1d")
     if hist.empty:
         raise ValueError(f"No se pudo obtener precio de {etf_tick}.")
     spot = float(hist['Close'].iloc[-1])
 
     # Precio del subyacente / futuros para conversión
     try:
-        fut_hist = yf.Ticker(fut_tick).history(period="1d", interval="5m")
+        fut_hist = yf.Ticker(fut_tick).history(period="5d", interval="5m")
+        if fut_hist.empty:
+            fut_hist = yf.Ticker(fut_tick).history(period="1mo", interval="1d")
         fut_price = float(fut_hist['Close'].iloc[-1]) if not fut_hist.empty else None
     except Exception:
         fut_price = None
@@ -1069,9 +1075,11 @@ def get_expiries_stock(ticker: str):
 def cargar_datos_stock(ticker: str, expiry: str):
     tk = yf.Ticker(ticker)
     h  = tk.history(period="5d", interval="15m")
+    if h.empty:
+        h = tk.history(period="1mo", interval="1d")
     if h.empty: raise ValueError(f"Sin precio para {ticker}")
     spot = float(h['Close'].iloc[-1])
-    h2   = tk.history(period="2d", interval="1d")
+    h2   = tk.history(period="5d", interval="1d")
     prev = float(h2['Close'].iloc[-2]) if len(h2) >= 2 else spot
     change_pct = (spot - prev) / prev * 100 if prev else 0.0
 
@@ -2021,84 +2029,6 @@ with st.sidebar:
     st.markdown("- 🟢 **GEX+** → RANGO\n- 🔴 **GEX-** → TENDENCIA\n- 🟡 **Neutro** → Transición\n- ⚡ **Max Pain** → Imán al vencimiento\n- ⚠️ **VIX>1** → Stress inminente")
     st.caption("Yahoo Finance + Deribit · Gratis · Sin API key")
 
-    # Selector de expiración por instrumento
-    expiry_selections = {}
-    for ikey, cfg in INSTRUMENTS.items():
-        try:
-            exps = get_expiries(cfg['etf'])[:10]
-            labels = []
-            for e in exps:
-                dt   = datetime.strptime(e, "%Y-%m-%d")
-                dias = (dt - datetime.now()).days
-                labels.append(f"{e} ({dias}d)")
-            sel = st.selectbox(
-                f"{cfg['emoji']} {ikey} — Expiración",
-                range(len(labels)),
-                format_func=lambda x, _l=labels: _l[x],
-                key=f"exp_{ikey}",
-            )
-            expiry_selections[ikey] = exps[sel]
-        except Exception as e:
-            st.error(f"{ikey}: {e}")
-            expiry_selections[ikey] = None
-
-    st.divider()
-    if st.button("🔄 Actualizar todos los datos", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-
-    st.divider()
-    # VIX Term Structure en sidebar
-    st.markdown("**🌡️ VIX — Term Structure**")
-    try:
-        vix_data = cargar_vix()
-        v9  = vix_data.get('VIX9D')
-        v30 = vix_data.get('VIX')
-        v3m = vix_data.get('VIX3M')
-        v6m = vix_data.get('VIX6M')
-        vxn = vix_data.get('VXN')
-        ratio_vix = vix_data.get('ratio')
-
-        vix_color = "#00c851" if v30 and v30 < 15 else ("#ffbb33" if v30 and v30 < 25 else "#ff4444")
-        ts_color  = "#00c851" if vix_data.get('ts_regime','').startswith('Contango') else "#ff4444"
-
-        st.markdown(
-            f'<div style="background:#161b22;border-radius:8px;padding:10px 12px;font-size:0.8rem;">'
-            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
-            f'<span style="color:#8b949e;">VIX 9D</span>'
-            f'<b style="color:{vix_color};">{v9 or "—"}</b></div>'
-            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
-            f'<span style="color:#8b949e;">VIX 30D</span>'
-            f'<b style="color:{vix_color};">{v30 or "—"}</b></div>'
-            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
-            f'<span style="color:#8b949e;">VIX 3M</span>'
-            f'<b style="color:#c9d1d9;">{v3m or "—"}</b></div>'
-            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
-            f'<span style="color:#8b949e;">VIX 6M</span>'
-            f'<b style="color:#c9d1d9;">{v6m or "—"}</b></div>'
-            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
-            f'<span style="color:#8b949e;">VXN (Nasdaq)</span>'
-            f'<b style="color:#58a6ff;">{vxn or "—"}</b></div>'
-            f'<hr style="border-color:#30363d;margin:6px 0;">'
-            f'<div style="color:#8b949e;">Ratio VIX9D/VIX: <b style="color:{ts_color};">{ratio_vix or "—"}</b></div>'
-            f'<div style="color:{ts_color};font-size:0.76rem;">{vix_data.get("ts_regime","—")}</div>'
-            f'<div style="color:{vix_color};font-size:0.76rem;">{vix_data.get("vix_regime","—")}</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-    except Exception:
-        st.caption("VIX no disponible")
-
-    st.divider()
-    st.markdown("**Guía rápida**")
-    st.markdown("""
-- 🟢 **GEX+** → Mercado en RANGO
-- 🔴 **GEX-** → Mercado TENDENCIAL
-- 🟡 **Neutro** → Zona de transición
-- ⚡ **Max Pain** → Imán del precio cerca de vencimiento
-- ⚠️ **VIX ratio > 1** → Stress inminente (backwardation)
-""")
-    st.caption("Datos: Yahoo Finance + Deribit · Gratis · Sin API key")
 
 
 # ════════════════════════════════════════════════════════════════
