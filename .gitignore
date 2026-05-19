@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Streamlit secrets (NUNCA subir API keys)
+.streamlit/secrets.toml
+
+# Archivos de historial local (se regeneran al correr el dashboard)
+levels_history.json
+mes_history.json
+gc_history.json
+btc_history.json
+stocks_iv_history.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
