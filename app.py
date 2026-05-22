@@ -697,6 +697,15 @@ lw_main      = input.int(2, "Grosor línea principal", group="⚙️ Visual", mi
 lw_sec       = input.int(1, "Grosor líneas secundarias", group="⚙️ Visual", minval=1, maxval=4)
 show_table   = input.bool(true, "Tabla sticky", group="⚙️ Visual")
 
+// ─────────────────────────────────────────────────────────────────
+// NIVELES DE HOY — sin abrir el Pine Editor
+// 1. Abre el dashboard  2. Copia el texto de "Copiar para TradingView"
+// 3. Abre configuración del indicador  4. Pega aquí  5. Listo ✓
+// Formato: P1,P2,P3,P4,P5,N1,N2,N3,N4,N5,MaxPain,Régimen(0=Pos 1=Neg 2=Neutro)
+// ─────────────────────────────────────────────────────────────────
+today_raw = input.text_area("", "▶ Pega los niveles de hoy aquí", group="📅 Niveles de Hoy",
+    tooltip="Copia desde el dashboard → sección 'Copiar para TradingView'\\nFormato: P1,P2,P3,P4,P5,N1,N2,N3,N4,N5,MaxPain,Régimen")
+
 C_POS = color.new(#00c851, 20)
 C_NEG = color.new(#ff4444, 20)
 C_MP  = color.new(#ffbb33, 30)
@@ -732,6 +741,14 @@ draw_lbl(int bi, float lvl, string pfx, float gm, bool is_pos, color col) =>
                   style=label.style_label_left, size=lbl_sz(), xloc=xloc.bar_index)
     result
 
+_tfl(array<string> p, int i) =>
+    float _r = na
+    if array.size(p) > i
+        _s = str.trim(array.get(p, i))
+        if str.length(_s) > 0
+            _r := str.tonumber(_s)
+    _r
+
 var hist_dates = array.from({fi(dates)})
 var pos1 = array.from({ff(p1s)})
 var pos2 = array.from({ff(p2s)})
@@ -756,6 +773,11 @@ var gxn3 = array.from({fg(gn3s)})
 var gxn4 = array.from({fg(gn4s)})
 var gxn5 = array.from({fg(gn5s)})
 
+// ── Parsear niveles de hoy desde input ──
+_t_parts  = str.split(today_raw, ",")
+_t_ok     = str.length(today_raw) > 5 and array.size(_t_parts) >= 11
+today_ymd = year(timenow) * 10000 + month(timenow) * 100 + dayofmonth(timenow)
+
 bar_date = year * 10000 + month * 100 + dayofmonth
 idx = -1
 for i = 0 to array.size(hist_dates) - 1
@@ -763,11 +785,18 @@ for i = 0 to array.size(hist_dates) - 1
         idx := i
         break
 
-p1v = get_f(pos1, idx); p2v = get_f(pos2, idx); p3v = get_f(pos3, idx)
-p4v = get_f(pos4, idx); p5v = get_f(pos5, idx)
-n1v = get_f(neg1, idx); n2v = get_f(neg2, idx); n3v = get_f(neg3, idx)
-n4v = get_f(neg4, idx); n5v = get_f(neg5, idx)
-mpv = show_mp ? get_f(maxp, idx) : float(na)
+_ot = bar_date == today_ymd and _t_ok
+p1v = _ot ? _tfl(_t_parts, 0)  : get_f(pos1, idx)
+p2v = _ot ? _tfl(_t_parts, 1)  : get_f(pos2, idx)
+p3v = _ot ? _tfl(_t_parts, 2)  : get_f(pos3, idx)
+p4v = _ot ? _tfl(_t_parts, 3)  : get_f(pos4, idx)
+p5v = _ot ? _tfl(_t_parts, 4)  : get_f(pos5, idx)
+n1v = _ot ? _tfl(_t_parts, 5)  : get_f(neg1, idx)
+n2v = _ot ? _tfl(_t_parts, 6)  : get_f(neg2, idx)
+n3v = _ot ? _tfl(_t_parts, 7)  : get_f(neg3, idx)
+n4v = _ot ? _tfl(_t_parts, 8)  : get_f(neg4, idx)
+n5v = _ot ? _tfl(_t_parts, 9)  : get_f(neg5, idx)
+mpv = show_mp ? (_ot ? _tfl(_t_parts, 10) : get_f(maxp, idx)) : float(na)
 
 plot(p1v, "GEX+ 1", C_POS, lw_main, plot.style_linebr)
 plot(p2v, "GEX+ 2", C_POS, lw_sec,  plot.style_linebr)
@@ -781,7 +810,9 @@ plot(n4v, "GEX- 4", C_NEG, lw_sec,  plot.style_linebr)
 plot(n5v, "GEX- 5", C_NEG, lw_sec,  plot.style_linebr)
 plot(mpv, "MaxPain", C_MP, lw_sec, plot.style_linebr)
 
-reg = idx >= 0 and idx < array.size(regs) ? array.get(regs, idx) : -1
+_t_reg_s  = _t_ok and array.size(_t_parts) > 11 ? str.trim(array.get(_t_parts, 11)) : "2"
+_t_reg_i  = _t_reg_s == "0" ? 0 : _t_reg_s == "1" ? 1 : 2
+reg = _ot ? _t_reg_i : (idx >= 0 and idx < array.size(regs) ? array.get(regs, idx) : -1)
 var label[] _s_lbls = array.new<label>()
 var line[]  _s_lns  = array.new<line>()
 var table   _tbl    = na
@@ -901,6 +932,26 @@ if barstate.islast and idx >= 0
 bgcolor(show_regime and reg==0 ? color.new(#00c851,97) :
         show_regime and reg==1 ? color.new(#ff4444,97) : na, title="Régimen gamma")
 """
+
+
+# ══════════════════════════════════════════════════════════════════
+# PINE SCRIPT — FORMATO PARA COPIAR HOY
+# ══════════════════════════════════════════════════════════════════
+
+def get_pine_today_string(ikey: str, history: dict) -> tuple[str, str, dict]:
+    """Devuelve (string_para_pine, fecha, data_del_dia) del último día disponible."""
+    if not history:
+        return "", "", {}
+    last_day = max(history.keys())
+    d = history[last_day]
+    pos = list(d.get('pos_levels', [0]*5))
+    neg = list(d.get('neg_levels', [0]*5))
+    while len(pos) < 5: pos.append(0)
+    while len(neg) < 5: neg.append(0)
+    mp  = d.get('max_pain_fut', d.get('max_pain_nq', 0))
+    reg = d.get('regime_int', 2)   # 0=Pos 1=Neg 2=Neutro
+    vals = [int(v) for v in pos[:5]] + [int(v) for v in neg[:5]] + [int(mp), int(reg)]
+    return ",".join(str(v) for v in vals), last_day, d
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1707,9 +1758,47 @@ def render_instrument_tab(ikey: str, data: dict | None, expiry: str):
                 })
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
+        # ── Copiar niveles para el indicador ──────────────────────────────
+        st.divider()
+        st.markdown("#### 📋 Copiar para TradingView")
+        pine_str, pine_day, pine_d = get_pine_today_string(ikey, history)
+        if pine_str:
+            reg_label = pine_d.get('regime', 'Neutro')
+            reg_icon  = '🟢' if reg_label == 'Positivo' else ('🔴' if reg_label == 'Negativo' else '🟡')
+            pos_lvls  = pine_d.get('pos_levels', [])
+            neg_lvls  = pine_d.get('neg_levels', [])
+            mp_val    = pine_d.get('max_pain_fut', pine_d.get('max_pain_nq', 0))
+
+            st.caption(
+                f"Niveles del **{pine_day}** · {reg_icon} {reg_label} · "
+                f"Copia y pega en la config del indicador → grupo **📅 Niveles de Hoy**"
+            )
+            st.code(pine_str, language=None)
+
+            with st.expander("Ver desglose de niveles"):
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.markdown("**🟢 GEX+ (soporte)**")
+                    pgx = pine_d.get('pos_gex_m', [0]*5)
+                    for i, v in enumerate(pos_lvls[:5]):
+                        if v: st.write(f"P{i+1}: **{int(v):,}** — ${pgx[i] if i < len(pgx) else 0:.1f}M")
+                with c2:
+                    st.markdown("**🔴 GEX- (resistencia)**")
+                    ngx = pine_d.get('neg_gex_m', [0]*5)
+                    for i, v in enumerate(neg_lvls[:5]):
+                        if v: st.write(f"N{i+1}: **{int(v):,}** — ${ngx[i] if i < len(ngx) else 0:.1f}M")
+                with c3:
+                    st.markdown("**⚡ Otros**")
+                    st.write(f"Max Pain: **{int(mp_val):,}**")
+                    st.write(f"Régimen: {reg_icon} {reg_label}")
+                    iv = pine_d.get('atm_iv', 0)
+                    if iv: st.write(f"IV ATM: **{iv:.1f}%**")
+
+        st.caption("ℹ️ El indicador ya tiene la sección '📅 Niveles de Hoy' — solo pega y guarda. Sin Pine Editor.")
+
         # Pine Script
         st.divider()
-        st.markdown("#### 📌 Exportar a TradingView")
+        st.markdown("#### 📌 Exportar indicador completo (primera vez)")
         pine_code = generate_pine_script(ikey, history)
         col_dl, col_info = st.columns([1, 2])
         with col_dl:
